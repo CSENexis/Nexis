@@ -7,6 +7,15 @@ from app.core.config import settings
 from app.core.security import generate_session_token, hash_token
 from app.core.errors import SessionExpiredException
 
+def _to_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Helper to ensure datetime is timezone-aware across both PostgreSQL and SQLite."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def create_session(
     db: Session,
     user_id: uuid.UUID,
@@ -66,14 +75,14 @@ def validate_and_refresh_session(
     now = datetime.now(timezone.utc)
 
     # Check absolute expiry (A40)
-    if now > session_record.absolute_expires_at:
+    if now > _to_utc(session_record.absolute_expires_at):
         session_record.state = SessionState.REVOKED
         session_record.revoked_at = now
         db.commit()
         return None
 
     # Check idle expiry (A40)
-    if now > session_record.idle_expires_at:
+    if now > _to_utc(session_record.idle_expires_at):
         session_record.state = SessionState.REVOKED
         session_record.revoked_at = now
         db.commit()

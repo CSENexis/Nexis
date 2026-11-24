@@ -32,6 +32,15 @@ from app.modules.security.lockout import (
 from app.modules.security.audit import log_audit_event
 
 
+def _to_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Ensure datetime is timezone-aware."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def start_account_recovery(
     db: Session,
     redis_client: redis.Redis,
@@ -156,11 +165,10 @@ def complete_account_recovery(
     # Validate recovery token atomically
     token_record = db.query(RecoveryToken).filter(
         RecoveryToken.token_hash == token_hash,
-        RecoveryToken.used_at.is_(None),
-        RecoveryToken.expires_at > now
+        RecoveryToken.used_at.is_(None)
     ).first()
 
-    if not token_record:
+    if not token_record or (token_record.expires_at and now > _to_utc(token_record.expires_at)):
         raise NexisAPIException(
             status_code=400,
             code="INVALID_RECOVERY_TOKEN",
