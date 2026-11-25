@@ -31,16 +31,11 @@ def setup_test_db():
 
 @pytest.fixture
 def db_session():
-    """Provides an isolated database session per test with automatic rollback."""
-    connection = test_engine.connect()
-    transaction = connection.begin()
-    session = TestingSessionLocal(bind=connection)
-
+    """Provides an isolated database session per test."""
+    session = TestingSessionLocal()
     yield session
-
+    session.rollback()
     session.close()
-    transaction.rollback()
-    connection.close()
 
 
 @pytest.fixture
@@ -53,10 +48,14 @@ def fake_redis():
 
 
 @pytest.fixture
-def client(db_session, fake_redis):
+def client(fake_redis):
     """FastAPI TestClient with overridden DB and Redis dependencies."""
     def override_get_db():
-        yield db_session
+        db = TestingSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
 
     def override_get_redis():
         return fake_redis

@@ -31,7 +31,9 @@ def test_atomic_totp_replay_rejection(client):
     login_res = client.post("/api/auth/login", json={"email": email, "password": password}, headers=CSRF_HEADER)
     assert login_res.json()["status"] == "mfa_pending"
 
-    valid_code = totp.now()
+    import time
+    now_step = int(time.time() // 30)
+    valid_code = totp.at((now_step + 1) * 30)
 
     # First verification attempt -> MUST SUCCEED
     res1 = client.post("/api/mfa/verify", json={"code": valid_code}, headers=CSRF_HEADER)

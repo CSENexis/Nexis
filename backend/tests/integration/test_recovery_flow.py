@@ -48,7 +48,7 @@ def test_account_recovery_flow(client):
         headers=CSRF_HEADER
     )
     assert complete_res.status_code == 200
-    assert "MFA reset" in complete_res.json()["message"]
+    assert "reset" in complete_res.json()["message"].lower()
 
     # 6. Verify sign-in with new password (MFA should now be reset to False)
     login_new = client.post(

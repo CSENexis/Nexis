@@ -65,6 +65,7 @@ app.include_router(mfa_router)
 app.include_router(recovery_router)
 
 
+@app.get("/api/health", tags=["Health"], summary="API health check through proxy")
 @app.get("/health", tags=["Health"], summary="System health check")
 def health():
     """Health check endpoint for Docker Compose and monitoring."""

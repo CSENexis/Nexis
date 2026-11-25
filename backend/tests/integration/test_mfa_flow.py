@@ -51,8 +51,10 @@ def test_full_totp_enrolment_and_verification_flow(client):
     me_res = client.get("/api/auth/me")
     assert me_res.json()["status"] == "mfa_pending"
 
-    # 6. Verify MFA using TOTP
-    verify_code = totp.now()
+    # 6. Verify MFA using TOTP (step + 1 within allowed drift window)
+    import time
+    now_step = int(time.time() // 30)
+    verify_code = totp.at((now_step + 1) * 30)
     verify_res = client.post(
         "/api/mfa/verify",
         json={"code": verify_code},

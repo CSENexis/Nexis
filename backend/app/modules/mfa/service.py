@@ -121,16 +121,8 @@ def confirm_mfa_enrolment(
     pending_secret = decrypt_totp_secret(user.mfa_pending_secret_encrypted)
     totp = pyotp.TOTP(pending_secret)
 
-    # Verify code with +/- 1 step drift window (FR5)
-    now_step = int(time.time() // 30)
-    matched_step = None
-    for step_offset in [0, -1, 1]:
-        test_step = now_step + step_offset
-        if totp.at(test_step) == clean_code:
-            matched_step = test_step
-            break
-
-    if matched_step is None:
+    # Verify code with +/- 1 step drift window (FR5, RFC 6238)
+    if not totp.verify(clean_code, valid_window=1):
         log_audit_event(
             db=db,
             event_type="mfa_enrol_confirm",
@@ -145,10 +137,11 @@ def confirm_mfa_enrolment(
         )
 
     # Enrolment confirmed: activate MFA
+    now_step = int(time.time() // 30)
     user.mfa_enabled = True
     user.mfa_secret_encrypted = user.mfa_pending_secret_encrypted
     user.mfa_pending_secret_encrypted = None
-    user.last_totp_step = matched_step
+    user.last_totp_step = now_step
 
     # Generate 10 one-time recovery codes (FR6, A17)
     plaintext_recovery_codes = generate_recovery_codes_batch(10)
@@ -213,9 +206,9 @@ def verify_totp_code(
 
     now_step = int(time.time() // 30)
     matched_step = None
-    for step_offset in [0, -1, 1]:
+    for step_offset in [0, 1, -1]:
         test_step = now_step + step_offset
-        if totp.at(test_step) == clean_code:
+        if totp.at(test_step * 30) == clean_code:
             matched_step = test_step
             break
 
@@ -238,7 +231,6 @@ def verify_totp_code(
 
     # 2. Atomic Replay Protection (NFR5, A42)
     # Ensure this time step (or older) has not already been used.
-    # Conditional SQL update guarantees race-safety across concurrent workers.
     stmt = (
         update(User)
         .where(
